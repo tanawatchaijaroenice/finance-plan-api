@@ -14,7 +14,11 @@ app.get('/', (req, res) => {
 });
 
 const apiRoutes = require('./routes/api');
-app.use('/api', apiRoutes);
+const authRoutes = require('./routes/auth.routes');
+const { authenticateToken } = require('./middleware/auth.middleware');
+
+app.use('/api/auth', authRoutes);
+app.use('/api', authenticateToken, apiRoutes);
 
 app.listen(PORT, () => {
     console.log(`Server is running on port ${PORT}`);

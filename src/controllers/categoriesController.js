@@ -19,6 +19,7 @@ const createCategory = async (req, res) => {
                 name,
                 defaultAmount: parseFloat(defaultAmount || 0),
                 type: type || 'EXPENSE'
+
             }
         });
         res.status(201).json(category);

@@ -4,6 +4,7 @@ const prisma = require('../prisma');
 const getMonths = async (req, res) => {
     try {
         const months = await prisma.month.findMany({
+            where: { userId: req.user.userId },
             orderBy: { createdAt: 'desc' },
         });
         res.json(months);
@@ -16,8 +17,10 @@ const getMonths = async (req, res) => {
 const getMonthDetails = async (req, res) => {
     const { id } = req.params;
     try {
-        const month = await prisma.month.findUnique({
-            where: { id: parseInt(id) },
+        const month = await prisma.month.findFirst({
+            where: {
+                id: parseInt(id),
+            },
             include: {
                 expenses: {
                     include: { category: true, account: true }
@@ -37,6 +40,12 @@ const updateMonth = async (req, res) => {
     const { id } = req.params;
     const { totalIncome } = req.body;
     try {
+        // Verify ownership
+        const existing = await prisma.month.findFirst({
+            where: { id: parseInt(id), userId: req.user.userId }
+        });
+        if (!existing) return res.status(404).json({ error: 'Month not found' });
+
         const month = await prisma.month.update({
             where: { id: parseInt(id) },
             data: {
@@ -57,13 +66,17 @@ const createMonth = async (req, res) => {
             data: {
                 name,
                 totalIncome: parseFloat(totalIncome),
+                userId: req.user.userId
             }
         });
 
         if (autoFillFromTemplate) {
-            // Find the most recent PREVIOUS month (excluding the one we just created)
+            // Find the most recent PREVIOUS month for THIS USER
             const previousMonth = await prisma.month.findFirst({
-                where: { id: { not: month.id } },
+                where: {
+                    id: { not: month.id },
+                    userId: req.user.userId
+                },
                 orderBy: { createdAt: 'desc' },
                 include: { expenses: true }
             });
@@ -80,8 +93,9 @@ const createMonth = async (req, res) => {
                 }));
                 await prisma.expense.createMany({ data: newExpenses });
             } else {
-                // Fallback: Create from Categories table if no previous month exists
-                const categories = await prisma.category.findMany();
+                // Fallback: Create from Categories table (User's categories)
+                const categories = await prisma.category.findMany({});
+
                 const expenses = categories.map(cat => ({
                     monthId: month.id,
                     categoryId: cat.id,
